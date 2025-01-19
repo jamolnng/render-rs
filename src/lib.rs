@@ -1,3 +1,6 @@
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -35,7 +38,7 @@ impl State {
             },
             ..Default::default()
         };
-        let instance = wgpu::Instance::new(instance_desc);
+        let instance = wgpu::Instance::new(&instance_desc);
 
         let surface = instance.create_surface(window.clone()).unwrap();
 
@@ -285,6 +288,7 @@ impl ApplicationHandler<UserEvent> for App {
 
                     // This happens when the frame takes too long to present
                     Err(wgpu::SurfaceError::Timeout) => {}
+                    _ => {}
                 }
             }
             _ => {}
@@ -302,6 +306,12 @@ pub fn run() -> Result<()> {
     #[cfg(target_arch = "wasm32")]
     {
         console_error_panic_hook::set_once();
+        console_log::init_with_level(log::Level::Warn)
+            .expect("Could not initialize console logger");
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
     }
 
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
@@ -309,4 +319,9 @@ pub fn run() -> Result<()> {
 
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
+pub fn wasm_main() {
+    run().unwrap();
 }
