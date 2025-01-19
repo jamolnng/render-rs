@@ -163,7 +163,7 @@ impl State {
             surface_configured = false;
         }
 
-        let diffuse_bytes = include_bytes!("logo.png");
+        let diffuse_bytes = include_bytes!("assets/logo.png");
         let diffuse_texture =
             crate::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "logo.png")
                 .unwrap();
@@ -252,7 +252,7 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let shader = device.create_shader_module(include_wgsl!("camera.wgsl"));
+        let shader = device.create_shader_module(include_wgsl!("shaders/camera.wgsl"));
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
