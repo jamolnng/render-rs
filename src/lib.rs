@@ -6,8 +6,11 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod camera;
+mod shader;
 mod state;
 mod texture;
+mod render;
+mod utils;
 
 pub fn run() -> Result<()> {
     #[cfg(target_arch = "wasm32")]

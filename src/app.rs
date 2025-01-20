@@ -87,7 +87,7 @@ impl ApplicationHandler<UserEvent> for App {
             return;
         };
 
-        if window_id != state.window.id() {
+        if window_id != state.context.window.id() {
             return;
         }
 
@@ -107,11 +107,11 @@ impl ApplicationHandler<UserEvent> for App {
                 ..
             } => event_loop.exit(),
             WindowEvent::Resized(physical_size) => {
-                state.surface_configured = true;
+                state.context.surface_configured = true;
                 state.resize(physical_size);
             }
             WindowEvent::RedrawRequested => {
-                if !state.surface_configured {
+                if !state.context.surface_configured {
                     return;
                 }
                 state.update();
@@ -119,7 +119,7 @@ impl ApplicationHandler<UserEvent> for App {
                     Ok(()) => {}
                     // Reconfigure the surface if it's lost or outdated
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.size);
+                        state.resize(state.context.size);
                     }
                     // The system is out of memory, we should probably quit
                     Err(wgpu::SurfaceError::OutOfMemory) => {
@@ -137,7 +137,7 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn about_to_wait(&mut self, _: &ActiveEventLoop) {
         if let Some(ref state) = self.state {
-            state.window.request_redraw();
+            state.context.window.request_redraw();
         };
     }
 }

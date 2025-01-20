@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use js_sys::Promise;
 use wgpu::include_wgsl;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
-use crate::camera;
+use crate::{camera, utils::load_data};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -71,13 +72,7 @@ const VERTICES: &[Vertex] = &[
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 pub(crate) struct State {
-    pub surface: wgpu::Surface<'static>,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
-    pub config: wgpu::SurfaceConfiguration,
-    pub size: PhysicalSize<u32>,
-    pub window: Arc<Window>,
-    pub surface_configured: bool,
+    pub context: crate::render::Context,
     pub camera: camera::Camera,
     pub camera_uniform: camera::CameraUniform,
     pub camera_buffer: wgpu::Buffer,
@@ -91,6 +86,7 @@ pub(crate) struct State {
     #[allow(unused)]
     pub diffuse_texture: crate::texture::Texture,
 }
+
 
 impl State {
     pub async fn new(window: Arc<Window>) -> State {
@@ -163,10 +159,14 @@ impl State {
             surface_configured = false;
         }
 
-        let diffuse_bytes = include_bytes!("assets/logo.png");
-        let diffuse_texture =
-            crate::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "logo.png")
-                .unwrap();
+        let diffuse_bytes = include_bytes!("../assets/logo.png");
+        let diffuse_texture = crate::texture::Texture::from_bytes(
+            &device,
+            &queue,
+            &diffuse_bytes.into(),
+            "asdf.png",
+        )
+        .unwrap();
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -252,7 +252,7 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let shader = device.create_shader_module(include_wgsl!("shaders/camera.wgsl"));
+        let shader = device.create_shader_module(include_wgsl!("../shaders/camera.wgsl"));
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -323,13 +323,15 @@ impl State {
         let num_indices = INDICES.len() as u32;
 
         Self {
-            surface: surface,
-            device: device,
-            queue: queue,
-            config: config,
-            size: size,
-            window: window,
-            surface_configured: surface_configured,
+            context: crate::render::Context {
+                surface: surface,
+                device: device,
+                queue: queue,
+                config: config,
+                size: size,
+                window: window,
+                surface_configured: surface_configured,
+            },
             camera: camera,
             camera_uniform: camera_uniform,
             camera_buffer: camera_buffer,
@@ -346,12 +348,15 @@ impl State {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config);
+            self.context.size = new_size;
+            self.context.config.width = new_size.width;
+            self.context.config.height = new_size.height;
+            self.context
+                .surface
+                .configure(&self.context.device, &self.context.config);
 
-            self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+            self.camera.aspect =
+                self.context.config.width as f32 / self.context.config.height as f32;
         }
     }
 
@@ -362,7 +367,7 @@ impl State {
     pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
-        self.queue.write_buffer(
+        self.context.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
@@ -370,16 +375,17 @@ impl State {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
+        let output = self.context.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let mut encoder =
+            self.context
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
 
         {
             let clear_color = wgpu::Color {
@@ -413,7 +419,7 @@ impl State {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.context.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())

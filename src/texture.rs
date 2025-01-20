@@ -12,11 +12,16 @@ impl Texture {
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        bytes: &[u8],
+        bytes: &Vec<u8>,
         label: &str,
     ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
+        match image::load_from_memory(&bytes) {
+            std::result::Result::Ok(img) => Self::from_image(device, queue, &img, Some(label)),
+            Err(e) => {
+                log::warn!("{}", &e.to_string());
+                Err(e.into())
+            }
+        }
     }
 
     pub fn from_image(
