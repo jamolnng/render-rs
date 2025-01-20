@@ -1,7 +1,12 @@
 use std::env::current_dir;
 
+pub enum ShaderSource<'a> {
+    File(String),
+    Bytes(&'a str),
+}
+
 pub(crate) struct PipelineBuilder<'a> {
-    shader_path: String,
+    shader_source: ShaderSource<'a>,
     vert_main: String,
     frag_main: Option<String>,
     pixel_format: wgpu::TextureFormat,
@@ -13,7 +18,7 @@ pub(crate) struct PipelineBuilder<'a> {
 impl<'a> PipelineBuilder<'a> {
     pub fn new(device: &'a wgpu::Device) -> Self {
         Self {
-            shader_path: String::new(),
+            shader_source: ShaderSource::File(String::new()),
             vert_main: String::new(),
             frag_main: None,
             pixel_format: wgpu::TextureFormat::Rgba8Unorm,
@@ -21,6 +26,11 @@ impl<'a> PipelineBuilder<'a> {
             bind_group_layouts: Vec::new(),
             device: &device,
         }
+    }
+
+    fn reset(&mut self) {
+        self.vertex_buffer_layouts.clear();
+        self.bind_group_layouts.clear();
     }
 
     pub fn add_vertex_buffer_layout(&mut self, layout: wgpu::VertexBufferLayout<'a>) -> &mut Self {
@@ -52,13 +62,12 @@ impl<'a> PipelineBuilder<'a> {
 
     pub fn set_shader_module(
         &mut self,
-        shader_path: &str,
+        shader_source: ShaderSource<'a>,
         vert_main: &str,
         frag_main: Option<&str>,
     ) -> &mut Self {
-        self.shader_path = shader_path.to_string();
+        self.shader_source = shader_source;
         self.vert_main = vert_main.to_string();
-
         self.frag_main = match frag_main {
             Some(frag_main) => Some(frag_main.to_string()),
             None => None,
@@ -72,10 +81,15 @@ impl<'a> PipelineBuilder<'a> {
     }
 
     fn build_shader(&self) -> wgpu::ShaderModule {
-        let mut filepath = current_dir().unwrap();
-        filepath.push(&self.shader_path);
-        let source = std::fs::read_to_string(&filepath)
-            .expect(&format!("Cannot read shader source file: {:?}", filepath).to_string());
+        let source: String = match &self.shader_source {
+            ShaderSource::File(path) => {
+                let mut filepath = current_dir().unwrap();
+                filepath.push(&path);
+                std::fs::read_to_string(&filepath)
+                    .expect(&format!("Cannot read shader source file: {:?}", filepath).to_string())
+            }
+            ShaderSource::Bytes(str) => str.to_string(),
+        };
         let shader_module_des = wgpu::ShaderModuleDescriptor {
             label: Some("Shader Module"),
             source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -93,7 +107,7 @@ impl<'a> PipelineBuilder<'a> {
             .create_pipeline_layout(render_pipeline_layout_desc)
     }
 
-    pub fn build(&self) -> wgpu::RenderPipeline {
+    pub fn build(&mut self) -> wgpu::RenderPipeline {
         let shader = self.build_shader();
         let render_pipeline_layout = self.build_pipeline_layout();
 
@@ -105,7 +119,8 @@ impl<'a> PipelineBuilder<'a> {
             }),
             write_mask: wgpu::ColorWrites::ALL,
         })];
-        self.device
+        let pipeline = self
+            .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Render Pipeline"),
                 layout: Some(&render_pipeline_layout),
@@ -152,6 +167,8 @@ impl<'a> PipelineBuilder<'a> {
                 multiview: None,
                 // Useful for optimizing shader compilation on Android
                 cache: None,
-            })
+            });
+        self.reset();
+        pipeline
     }
 }
