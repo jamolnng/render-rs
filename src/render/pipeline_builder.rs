@@ -2,7 +2,7 @@ use std::env::current_dir;
 
 pub enum ShaderSource<'a> {
     File(String),
-    Bytes(&'a str),
+    Str(&'a str),
 }
 
 pub(crate) struct PipelineBuilder<'a> {
@@ -88,7 +88,7 @@ impl<'a> PipelineBuilder<'a> {
                 std::fs::read_to_string(&filepath)
                     .expect(&format!("Cannot read shader source file: {:?}", filepath).to_string())
             }
-            ShaderSource::Bytes(str) => str.to_string(),
+            ShaderSource::Str(str) => str.to_string(),
         };
         let shader_module_des = wgpu::ShaderModuleDescriptor {
             label: Some("Shader Module"),
