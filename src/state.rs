@@ -1,11 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use js_sys::Promise;
-use wgpu::include_wgsl;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
-use crate::{camera, utils::load_data};
+use crate::camera;
+use crate::render::PipelineBuilder;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -87,7 +86,6 @@ pub(crate) struct State {
     pub diffuse_texture: crate::texture::Texture,
 }
 
-
 impl State {
     pub async fn new(window: Arc<Window>) -> State {
         let size = window.inner_size();
@@ -160,13 +158,9 @@ impl State {
         }
 
         let diffuse_bytes = include_bytes!("../assets/logo.png");
-        let diffuse_texture = crate::texture::Texture::from_bytes(
-            &device,
-            &queue,
-            &diffuse_bytes.into(),
-            "asdf.png",
-        )
-        .unwrap();
+        let diffuse_texture =
+            crate::texture::Texture::from_bytes(&device, &queue, &diffuse_bytes.into(), "asdf.png")
+                .unwrap();
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -252,63 +246,6 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let shader = device.create_shader_module(include_wgsl!("../shaders/camera.wgsl"));
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::POLYGON_MODE_LINE
-                // or Features::POLYGON_MODE_POINT
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            // If the pipeline will be used with a multiview render pass, this
-            // indicates how many array layers the attachments will have.
-            multiview: None,
-            // Useful for optimizing shader compilation on Android
-            cache: None,
-        });
-
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(VERTICES),
@@ -321,6 +258,13 @@ impl State {
             usage: wgpu::BufferUsages::INDEX,
         });
         let num_indices = INDICES.len() as u32;
+
+        let render_pipeline = PipelineBuilder::new(&device)
+            .add_vertex_buffer_layout(Vertex::desc())
+            .add_bind_group_layouts(&[&texture_bind_group_layout, &camera_bind_group_layout])
+            .set_shader_module("shaders/camera.wgsl", "vs_main", Some("fs_main"))
+            .set_pixel_format(config.format)
+            .build();
 
         Self {
             context: crate::render::Context {

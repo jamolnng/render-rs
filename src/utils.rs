@@ -6,6 +6,7 @@ use js_sys::{ArrayBuffer, Uint8Array};
 use wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
+#[cfg(target_arch = "wasm32")]
 use web_sys::FileReader;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{Request, RequestInit, Response};
