@@ -60,7 +60,7 @@ impl ApplicationHandler<UserEvent> for App {
                     .send_event(UserEvent::StateReady(state))
                     .is_ok());
             };
-            wasm_bindgen_futures::spawn_local(future)
+            wasm_bindgen_futures::spawn_local(future);
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

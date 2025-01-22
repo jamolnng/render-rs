@@ -1,7 +1,7 @@
 use std::env::current_dir;
 
 pub enum ShaderSource<'a> {
-    File(String),
+    Path(String),
     Str(&'a str),
 }
 
@@ -18,7 +18,7 @@ pub(crate) struct PipelineBuilder<'a> {
 impl<'a> PipelineBuilder<'a> {
     pub fn new(device: &'a wgpu::Device) -> Self {
         Self {
-            shader_source: ShaderSource::File(String::new()),
+            shader_source: ShaderSource::Path(String::new()),
             vert_main: String::new(),
             frag_main: None,
             pixel_format: wgpu::TextureFormat::Rgba8Unorm,
@@ -80,13 +80,10 @@ impl<'a> PipelineBuilder<'a> {
         self
     }
 
-    fn build_shader(&self) -> wgpu::ShaderModule {
+    async fn build_shader(&self) -> wgpu::ShaderModule {
         let source: String = match &self.shader_source {
-            ShaderSource::File(path) => {
-                let mut filepath = current_dir().unwrap();
-                filepath.push(&path);
-                std::fs::read_to_string(&filepath)
-                    .expect(&format!("Cannot read shader source file: {:?}", filepath).to_string())
+            ShaderSource::Path(path) => {
+                crate::utils::load_string(path).await.unwrap()
             }
             ShaderSource::Str(str) => str.to_string(),
         };
@@ -107,8 +104,8 @@ impl<'a> PipelineBuilder<'a> {
             .create_pipeline_layout(render_pipeline_layout_desc)
     }
 
-    pub fn build(&mut self) -> wgpu::RenderPipeline {
-        let shader = self.build_shader();
+    pub async fn build(&mut self) -> wgpu::RenderPipeline {
+        let shader = self.build_shader().await;
         let render_pipeline_layout = self.build_pipeline_layout();
 
         let fs_targets = [Some(wgpu::ColorTargetState {

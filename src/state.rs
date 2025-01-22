@@ -210,17 +210,17 @@ impl State {
             });
         let num_indices = INDICES.len() as u32;
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let shader_source = ShaderSource::File("shaders/camera.wgsl".into());
-        #[cfg(target_arch = "wasm32")]
-        let shader_source = ShaderSource::Str(include_str!("../shaders/camera.wgsl"));
+        // #[cfg(not(target_arch = "wasm32"))]
+        let shader_source = ShaderSource::Path("shaders/camera.wgsl".into());
+        // #[cfg(target_arch = "wasm32")]
+        // let shader_source = ShaderSource::Str(include_str!("../shaders/camera.wgsl"));
 
         let render_pipeline = PipelineBuilder::new(&context.device)
             .add_vertex_buffer_layout(Vertex::desc())
             .add_bind_group_layouts(&[&texture_bind_group_layout, &camera_bind_group_layout])
             .set_shader_module(shader_source, "vs_main", Some("fs_main"))
             .set_pixel_format(context.config.format)
-            .build();
+            .build().await;
 
         Self {
             context: context,

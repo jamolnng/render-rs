@@ -12,7 +12,7 @@ mod texture;
 mod render;
 mod utils;
 
-pub fn run() -> Result<()> {
+pub async fn run() -> Result<()> {
     #[cfg(target_arch = "wasm32")]
     {
         console_error_panic_hook::set_once();
@@ -32,6 +32,6 @@ pub fn run() -> Result<()> {
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub fn wasm_main() {
-    run().unwrap();
+pub async fn wasm_main() {
+    run().await.unwrap();
 }

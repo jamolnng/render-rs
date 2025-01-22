@@ -34,7 +34,8 @@ web-sys = { version = "0.3", features = [
   "Headers",
   "FileReader",
 ] }
-js-sys ={ version = "0.3.77" }
+js-sys = { version = "0.3.77" }
+reqwest = { version = "0.12.12" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
