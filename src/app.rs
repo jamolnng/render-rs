@@ -1,143 +1,98 @@
-use std::sync::Arc;
-
+use crate::graphics::{create_graphics, Graphics, Rc};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{ElementState, KeyEvent, WindowEvent},
+    event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
-    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
-use crate::state::{State, UserEvent};
+#[derive(Debug)]
+enum State {
+    Ready(Graphics),
+    Init(Option<EventLoopProxy<Graphics>>),
+}
 
-pub(crate) struct App {
-    state: Option<State>,
-    event_loop_proxy: EventLoopProxy<UserEvent>,
+pub struct App {
+    state: State,
 }
 
 impl App {
-    pub fn new(event_loop: &EventLoop<UserEvent>) -> Self {
+    pub fn new(event_loop: &EventLoop<Graphics>) -> Self {
         Self {
-            state: None,
-            event_loop_proxy: event_loop.create_proxy(),
+            state: State::Init(Some(event_loop.create_proxy())),
+        }
+    }
+
+    fn draw(&mut self) {
+        if let State::Ready(gfx) = &mut self.state {
+            gfx.draw();
+        }
+    }
+
+    fn resized(&mut self, size: PhysicalSize<u32>) {
+        if let State::Ready(gfx) = &mut self.state {
+            gfx.resize(size);
         }
     }
 }
 
-impl ApplicationHandler<UserEvent> for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attrs = Window::default_attributes()
-            .with_inner_size(PhysicalSize::new(450, 400))
-            .with_title("Flip Fluid Sim");
-        let window = event_loop
-            .create_window(window_attrs)
-            .expect("Couldn't create window.");
-        #[cfg(target_arch = "wasm32")]
-        {
-            use web_sys::Element;
-            use winit::{dpi::PhysicalSize, platform::web::WindowExtWebSys};
-
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| {
-                    let dst = doc.get_element_by_id("wasm-example")?;
-                    let canvas = Element::from(window.canvas()?);
-                    dst.append_child(&canvas).ok()?;
-                    Some(())
-                })
-                .expect("Couldn't append canvas to document body.");
-
-            // Winit prevents sizing with CSS, so we have to set
-            // the size manually when on web.
-            let _ = window.request_inner_size(PhysicalSize::new(450, 400));
-
-            let state_future = State::new(Arc::new(window));
-            let event_loop_proxy = self.event_loop_proxy.clone();
-            let future = async move {
-                let state = state_future.await;
-                assert!(event_loop_proxy
-                    .send_event(UserEvent::StateReady(state))
-                    .is_ok());
-            };
-            wasm_bindgen_futures::spawn_local(future);
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let state = pollster::block_on(State::new(Arc::new(window)));
-            assert!(self
-                .event_loop_proxy
-                .send_event(UserEvent::StateReady(state))
-                .is_ok());
-        }
-    }
-
-    fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
-        let UserEvent::StateReady(state) = event;
-        self.state = Some(state);
-    }
-
+impl ApplicationHandler<Graphics> for App {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let Some(ref mut state) = self.state else {
-            return;
-        };
-
-        if window_id != state.context.window.id() {
-            return;
-        }
-
-        if state.input(&event) {
-            return;
-        }
-
         match event {
-            WindowEvent::CloseRequested
-            | WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state: ElementState::Pressed,
-                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                        ..
-                    },
-                ..
-            } => event_loop.exit(),
-            WindowEvent::Resized(physical_size) => {
-                state.context.surface_configured = true;
-                state.resize(physical_size);
-            }
-            WindowEvent::RedrawRequested => {
-                if !state.context.surface_configured {
-                    return;
-                }
-                state.update();
-                match state.render() {
-                    Ok(()) => {}
-                    // Reconfigure the surface if it's lost or outdated
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.context.size);
-                    }
-                    // The system is out of memory, we should probably quit
-                    Err(wgpu::SurfaceError::OutOfMemory) => {
-                        event_loop.exit();
-                    }
-
-                    // This happens when the frame takes too long to present
-                    Err(wgpu::SurfaceError::Timeout) => {}
-                    _ => {}
-                }
-            }
+            WindowEvent::Resized(size) => self.resized(size),
+            WindowEvent::RedrawRequested => self.draw(),
+            WindowEvent::CloseRequested => event_loop.exit(),
             _ => {}
         }
     }
 
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if let State::Init(proxy) = &mut self.state {
+            if let Some(proxy) = proxy.take() {
+                let mut win_attr = Window::default_attributes();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    win_attr = win_attr
+                        .with_title("WebGPU example")
+                        .with_inner_size(PhysicalSize::new(450, 450));
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    use winit::platform::web::WindowAttributesExtWebSys;
+                    win_attr = win_attr.with_append(true);
+                }
+
+                let window = Rc::new(
+                    event_loop
+                        .create_window(win_attr)
+                        .expect("create window err."),
+                );
+
+                #[cfg(target_arch = "wasm32")]
+                wasm_bindgen_futures::spawn_local(create_graphics(window, proxy));
+
+                #[cfg(not(target_arch = "wasm32"))]
+                pollster::block_on(create_graphics(window, proxy));
+            }
+        }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, graphics: Graphics) {
+        self.state = State::Ready(graphics);
+    }
+
     fn about_to_wait(&mut self, _: &ActiveEventLoop) {
-        if let Some(ref state) = self.state {
-            state.context.window.request_redraw();
-        };
+        match &mut self.state {
+            State::Ready(gfx) => { gfx.request_redraw(); },
+            _ => {}
+        }
     }
 }

@@ -1,0 +1,41 @@
+[package]
+name = "render-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+image = { version = "0.25.5", default-features = false, features = ["png"] }
+cgmath = "0.18"
+winit = { version = "0.30.8" }
+anyhow = { version = "1.0.95" }
+log = { version = "0.4.25" }
+env_logger = { version = "0.11.6" }
+bytemuck = { version = "1.16", features = ["derive"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pollster = { version = "0.4.0" }
+wgpu = { version = "24.0.0" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.7"
+console_log = "1.0"
+wgpu = { version = "24.0.0", features = ["webgl"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+  "Document",
+  "Element",
+  "Window",
+  "Location",
+  "Request",
+  "RequestInit",
+  "RequestMode",
+  "Response",
+  "Headers",
+  "FileReader",
+] }
+js-sys = { version = "0.3.77" }
+reqwest = { version = "0.12.12" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
