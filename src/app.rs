@@ -86,13 +86,7 @@ impl ApplicationHandler<Graphics> for App {
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, graphics: Graphics) {
+        graphics.request_redraw();
         self.state = State::Ready(graphics);
-    }
-
-    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
-        match &mut self.state {
-            State::Ready(gfx) => { gfx.request_redraw(); },
-            _ => {}
-        }
     }
 }

@@ -124,7 +124,7 @@ impl Graphics {
         self.surface.configure(&self.device, &self.surface_config);
     }
 
-    pub fn request_redraw(&mut self)
+    pub fn request_redraw(&self)
     {
         self.window.request_redraw();
     }
